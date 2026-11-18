@@ -1,0 +1,83 @@
+name: Role gate
+
+on:
+  workflow_call:
+    inputs:
+      teams:
+        description: 'Roles exigidas (team slugs do GitHub), separadas por virgulas'
+        required: false
+        default: 'admins,developers'
+        type: string
+      mode:
+        description: 'ANY = pelo menos uma role; ALL = todas as roles'
+        required: false
+        default: 'ANY'
+        type: string
+    secrets:
+      ORG_READ_TOKEN:
+        description: 'PAT com read:org ou token de GitHub App com Members: Read-only'
+        required: true
+    outputs:
+      allowed:
+        description: "'true' se o ator tem as roles exigidas"
+        value: ${{ jobs.gate.outputs.allowed }}
+      teams:
+        description: 'Teams do ator (JSON)'
+        value: ${{ jobs.gate.outputs.teams }}
+  workflow_dispatch:
+    inputs:
+      teams:
+        description: 'Roles exigidas (team slugs do GitHub), separadas por virgulas'
+        required: false
+        default: 'admins,developers'
+        type: string
+      mode:
+        description: 'ANY = pelo menos uma role; ALL = todas as roles'
+        required: false
+        default: 'ANY'
+        type: choice
+        options:
+          - ANY
+          - ALL
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Resolver teams do ator
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.evaluate.outputs.allowed }}
+      teams: ${{ steps.membership.outputs.teams }}
+    steps:
+      - name: Checkout (script de avaliacao)
+        uses: actions/checkout@v4
+
+      - name: Obter teams do ator
+        id: membership
+        uses: tspascoal/get-user-teams-membership@v4
+        with:
+          username: ${{ github.actor }}
+          organization: ${{ github.repository_owner }}
+          team: ${{ inputs.teams }}
+          use_team_slug: true
+          GITHUB_TOKEN: ${{ secrets.ORG_READ_TOKEN }}
+
+      - name: Avaliar roles (ANY/ALL)
+        id: evaluate
+        env:
+          TEAMS: ${{ steps.membership.outputs.teams }}
+          REQUIRED: ${{ inputs.teams }}
+          MODE: ${{ inputs.mode }}
+        run: ./.github/scripts/role-gate.sh
+
+      - name: Resumo
+        if: always()
+        env:
+          ALLOWED: ${{ steps.evaluate.outputs.allowed }}
+          TEAMS: ${{ steps.membership.outputs.teams }}
+        run: |
+          echo "Ator: ${{ github.actor }}"
+          echo "Teams: $TEAMS"
+          echo "Permitido: ${ALLOWED:-desconhecido}"

@@ -1,0 +1,10 @@
+# Utilizadores e respetivas roles (configuracao de exemplo).
+users:
+  - username: alice
+    roles: [admin, developer]
+  - username: bob
+    roles: [developer]
+  - username: carol
+    roles: [qa, developer]
+  - username: dave
+    roles: [admin]
